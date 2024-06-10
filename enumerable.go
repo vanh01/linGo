@@ -22,10 +22,14 @@ func (p ParallelEnumerable[T]) AsEnumerable() Enumerable[T] {
 		getIter: func() <-chan T {
 			ch := make(chan T)
 
+			temp := p
+			if p.ordered {
+				temp = temp.order()
+			}
 			go func() {
 				defer close(ch)
-				for value := range p.getIter() {
-					ch <- value
+				for value := range temp.getIter() {
+					ch <- value.val
 				}
 			}()
 
@@ -36,6 +40,29 @@ func (p ParallelEnumerable[T]) AsEnumerable() Enumerable[T] {
 
 // AsEnumerable creates a new Enumerable
 func AsEnumerable[T any](t []T) Enumerable[T] {
+	return Enumerable[T]{
+		getIter: func() <-chan T {
+			ch := make(chan T)
+
+			go func() {
+				defer close(ch)
+				for _, value := range t {
+					ch <- value
+				}
+			}()
+
+			return ch
+		},
+	}
+}
+
+// AsEnumerableFromChannel creates a new Enumerable from a receive-only channel
+func AsEnumerableFromChannel[T any](c <-chan T) Enumerable[T] {
+	var t []T
+	for value := range c {
+		t = append(t, value)
+	}
+
 	return Enumerable[T]{
 		getIter: func() <-chan T {
 			ch := make(chan T)
